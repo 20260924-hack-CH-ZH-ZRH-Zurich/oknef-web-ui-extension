@@ -1,0 +1,9 @@
+body {
+  width: var(--width-popup);
+  min-height: 34rem;
+}
+@media (min-width: 40rem) {
+  body {
+    width: 100%;
+  }
+}
