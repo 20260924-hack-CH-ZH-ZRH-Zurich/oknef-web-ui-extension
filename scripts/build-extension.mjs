@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parseAppOrigin } from "../src/lib/config.ts";
 import { buildWorkspace } from "./build-workspace.mjs";
@@ -59,12 +59,36 @@ await writeFile(
   resolve(out, "manifest.json"),
   `${JSON.stringify(manifest, null, 2)}\n`,
 );
+const notices = [];
+const seen = new Set();
+const pending = Object.keys(pkg.dependencies);
+while (pending.length) {
+  const name = pending.pop();
+  if (seen.has(name)) continue;
+  seen.add(name);
+  const directory = resolve(root, "node_modules", name);
+  let dependency;
+  try {
+    dependency = JSON.parse(
+      await readFile(resolve(directory, "package.json"), "utf8"),
+    );
+  } catch {
+    continue; // Optional platform-specific dependencies may not be installed.
+  }
+  pending.push(...Object.keys(dependency.dependencies || {}));
+  for (const file of (await readdir(directory)).filter((file) =>
+    /^(license|licence|copying|notice)([.-]|$)/i.test(file),
+  )) {
+    const content = await readFile(resolve(directory, file), "utf8").catch(
+      () => null,
+    );
+    if (content)
+      notices.push(`${name}@${dependency.version} — ${file}\n\n${content}`);
+  }
+}
 await writeFile(
   resolve(out, "LICENSES.txt"),
-  "Oknef mini apps bundles React and React DOM under the MIT license.\n\n" +
-    (await readFile(resolve(root, "node_modules/react/LICENSE"), "utf8")) +
-    "\n\njsQR license:\n\n" +
-    (await readFile(resolve(root, "node_modules/jsqr/LICENSE"), "utf8")),
+  `Installed dependency notices (includes build-only packages)\n\n${notices.join("\n\n")}`,
 );
 await rm(resolve(root, "dist/oknef-extension.zip"), { force: true });
 execFileSync("zip", ["-q", "-r", "-X", "../oknef-extension.zip", "."], {
