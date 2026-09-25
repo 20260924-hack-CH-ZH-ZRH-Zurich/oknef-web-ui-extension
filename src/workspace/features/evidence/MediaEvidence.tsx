@@ -1,0 +1,273 @@
+import { Button } from "@workspace/components/ui/buttons/Button/Button";
+import { AudioCapture } from "@workspace/features/capture/AudioCapture";
+import { observeCaptureLifecycle } from "@workspace/features/capture/lifecycle";
+import { MediaPreview } from "@workspace/features/capture/MediaPreview";
+import { useCaptureMessages } from "@workspace/features/capture/messages";
+import { VideoCapture } from "@workspace/features/capture/VideoCapture";
+import { DocumentResult } from "@workspace/features/chat/DocumentResult";
+import type { DocumentReply } from "@workspace/features/chat/documents";
+import { usePreferences } from "@workspace/features/preferences/Preferences";
+import { useProductMessages } from "@workspace/features/product/messages";
+import { CameraCapture } from "@workspace/features/qr/CameraCapture";
+import type { SessionKind } from "@workspace/features/security/contracts";
+import { api } from "@workspace/lib/api";
+import { useEffect, useRef, useState } from "react";
+import { z } from "zod";
+import type { Evidence } from "./localStore";
+import { analyzeMedia } from "./mediaAnalysis";
+
+export function MediaEvidence({
+  kind,
+  onText,
+  onEvidence,
+  onDocument,
+  onBusyChange,
+}: {
+  kind: SessionKind;
+  onText: (value: string) => void;
+  onEvidence: (file: File, source: Evidence["source"]) => Promise<void>;
+  onDocument?: (value: DocumentReply | undefined) => void;
+  onBusyChange?: (busy: boolean) => void;
+}) {
+  const m = useProductMessages();
+  const capture = useCaptureMessages();
+  const { locale } = usePreferences();
+  const [file, setFile] = useState<File | null>(null);
+  const [consent, setConsent] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [videoActive, setVideoActive] = useState(false);
+  const locked = pending || recording || cameraActive || videoActive;
+  const [error, setError] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [documentResult, setDocumentResult] = useState<DocumentReply>();
+  const mounted = useRef(true);
+  const request = useRef<AbortController | null>(null);
+  useEffect(() => {
+    onBusyChange?.(locked);
+  }, [locked, onBusyChange]);
+  useEffect(() => {
+    mounted.current = true;
+    const stop = () => {
+      request.current?.abort();
+      request.current = null;
+      if (mounted.current) {
+        setRecording(false);
+        setPending(false);
+      }
+    };
+    const dispose = observeCaptureLifecycle(stop);
+    return () => {
+      mounted.current = false;
+      dispose();
+    };
+  }, []);
+  async function choose(
+    value: File | undefined,
+    source: Evidence["source"] = "upload",
+  ) {
+    setError("");
+    if (!value) return;
+    const allowed =
+      kind === "call"
+        ? /^(audio\/(webm|wav|x-wav|mpeg|mp4|ogg)|video\/webm)$/
+        : kind === "video"
+          ? /^video\/(mp4|webm|quicktime)$/
+          : kind === "identity"
+            ? /^(image\/(png|jpeg)|video\/(mp4|webm|quicktime))$/
+            : /^image\/(png|jpeg)$/;
+    if (
+      !allowed.test(value.type.split(";")[0]) ||
+      value.size >
+        (value.type.startsWith("video/") && kind !== "call"
+          ? 20 * 1024 * 1024
+          : kind === "call"
+            ? 12_000_000
+            : 4_000_000)
+    ) {
+      setError(m.fileTooLarge);
+      return;
+    }
+    setPending(true);
+    setFile(null);
+    setDocumentResult(undefined);
+    onDocument?.(undefined);
+    onText("");
+    try {
+      await onEvidence(value, source);
+      if (mounted.current) setFile(value);
+    } finally {
+      if (mounted.current) setPending(false);
+    }
+  }
+  async function transcribe(value: File, source: Evidence["source"]) {
+    if (!mounted.current) return;
+    setRecording(false);
+    setPending(true);
+    setError("");
+    const controller = new AbortController();
+    request.current = controller;
+    try {
+      await onEvidence(value, source);
+      controller.signal.throwIfAborted();
+      const form = new FormData();
+      form.append("file", value);
+      form.append("locale", locale);
+      const result = await api(
+        "/transcribe",
+        z.object({ text: z.string(), model: z.string() }).strict(),
+        { method: "POST", body: form, signal: controller.signal },
+      );
+      if (mounted.current && !controller.signal.aborted) onText(result.text);
+    } catch {
+      if (mounted.current && !controller.signal.aborted) setError(m.error);
+    } finally {
+      if (request.current === controller) {
+        request.current = null;
+        if (mounted.current) setPending(false);
+      }
+    }
+  }
+  async function extract() {
+    if (!file) return;
+    const controller = new AbortController();
+    request.current = controller;
+    setPending(true);
+    setError("");
+    try {
+      const result = await analyzeMedia(
+        file,
+        kind,
+        locale,
+        controller.signal,
+        prompt,
+      );
+      if (mounted.current && !controller.signal.aborted) {
+        onText(result.text);
+        if ("document" in result) {
+          setDocumentResult(result.document);
+          onDocument?.(result.document);
+        }
+      }
+    } catch {
+      if (mounted.current && !controller.signal.aborted) setError(m.error);
+    } finally {
+      if (request.current === controller) {
+        request.current = null;
+        if (mounted.current) setPending(false);
+      }
+    }
+  }
+  return (
+    <section className="rounded-2xl border border-border p-4 space-y-4">
+      <p className="text-xs leading-6 text-secondary">{m.mediaBoundary}</p>
+      {(kind === "document" || kind === "identity") && (
+        <CameraCapture
+          facingMode={kind === "identity" ? "user" : "environment"}
+          name={kind === "identity" ? "portrait" : "document"}
+          help={capture.photoHelp}
+          captureLabel={capture.capturePhoto}
+          disabled={pending || recording || videoActive}
+          onActiveChange={setCameraActive}
+          onCapture={(value) => choose(value, "camera")}
+        />
+      )}
+      {(kind === "video" || kind === "identity") && (
+        <VideoCapture
+          disabled={pending || recording || cameraActive}
+          onActiveChange={setVideoActive}
+          face={kind === "identity"}
+          onCapture={(value) => choose(value, "camera")}
+        />
+      )}
+      <label className="block">
+        <span className="field-label">{m.upload}</span>
+        <input
+          className="field"
+          type="file"
+          disabled={locked}
+          accept={
+            kind === "call"
+              ? "audio/*"
+              : kind === "video"
+                ? "video/mp4,video/webm,video/quicktime"
+                : kind === "identity"
+                  ? "image/png,image/jpeg,video/mp4,video/webm,video/quicktime"
+                  : "image/png,image/jpeg"
+          }
+          onChange={(event) => {
+            void choose(event.target.files?.[0]).catch(() => setError(m.error));
+            event.target.value = "";
+          }}
+        />
+      </label>
+      {file && (
+        <p className="text-xs text-secondary">
+          {capture.file}: {file.name} · {file.size} {m.bytes}
+        </p>
+      )}
+      {file && <MediaPreview file={file} label={capture.file} />}
+      {kind !== "call" && (
+        <label className="block">
+          <span className="field-label">{capture.prompt}</span>
+          <textarea
+            className="field"
+            value={prompt}
+            disabled={pending}
+            maxLength={1000}
+            rows={2}
+            onChange={(event) => setPrompt(event.target.value)}
+          />
+          <span className="subtext">{capture.promptHelp}</span>
+        </label>
+      )}
+      <label className="flex items-start gap-3 text-xs leading-6">
+        <input
+          type="checkbox"
+          checked={consent}
+          disabled={locked}
+          onChange={(event) => setConsent(event.target.checked)}
+        />
+        {m.consent}
+      </label>
+      <div className="flex flex-wrap gap-2">
+        {kind === "call" ? (
+          <>
+            <AudioCapture
+              disabled={!consent || pending}
+              onRecordingChange={setRecording}
+              onCapture={(value) => transcribe(value, "microphone")}
+            />
+            <Button
+              type="button"
+              disabled={!consent || !file || locked}
+              onClick={() => file && transcribe(file, "upload")}
+            >
+              {m.transcribe}
+            </Button>
+          </>
+        ) : (
+          <Button
+            type="button"
+            disabled={!consent || !file || locked}
+            onClick={extract}
+          >
+            {file?.type.startsWith("video/")
+              ? capture.reviewFrames
+              : kind === "identity"
+                ? capture.reviewVisual
+                : m.extract}
+          </Button>
+        )}
+      </div>
+      {pending && <output className="text-xs">{m.pending}</output>}
+      {error && (
+        <p role="alert" className="text-xs text-danger">
+          {error}
+        </p>
+      )}
+      {documentResult && <DocumentResult result={documentResult} />}
+    </section>
+  );
+}

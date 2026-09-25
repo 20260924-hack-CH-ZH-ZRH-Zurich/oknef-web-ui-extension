@@ -1,6 +1,9 @@
 import type { Copy } from "../translations";
 
 export const en: Copy = {
+  openWorkspace: "Open full workspace",
+  workspaceError:
+    "The workspace could not open. Reload the extension and try again.",
   language: "Language",
   eyebrow: "YOUR EVERYDAY SAFETY KIT",
   title: "Pause. Check. Decide.",

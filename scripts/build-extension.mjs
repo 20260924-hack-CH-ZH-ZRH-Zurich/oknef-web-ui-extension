@@ -2,11 +2,15 @@ import { execFileSync } from "node:child_process";
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parseAppOrigin } from "../src/lib/config.ts";
+import { buildWorkspace } from "./build-workspace.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const out = resolve(root, "dist/unpacked");
 const origin = parseAppOrigin(process.env.NEXT_PUBLIC_OKNEF_APP_ORIGIN);
 const pkg = JSON.parse(await readFile(resolve(root, "package.json"), "utf8"));
+const identity = JSON.parse(
+  await readFile(resolve(root, "extension-identity.json"), "utf8"),
+);
 await rm(out, { recursive: true, force: true });
 await mkdir(out, { recursive: true });
 const result = await Bun.build({
@@ -22,6 +26,7 @@ const result = await Bun.build({
   },
 });
 if (!result.success) throw new Error(result.logs.map(String).join("\n"));
+await buildWorkspace(root, out, origin);
 await cp(resolve(root, "src/extension/popup.html"), resolve(out, "popup.html"));
 await cp(resolve(root, "public/icons"), resolve(out, "icons"), {
   recursive: true,
@@ -30,9 +35,11 @@ const manifest = {
   manifest_version: 3,
   name: "Oknef mini apps",
   version: pkg.version,
+  key: identity.publicDer,
   description:
-    "Local QR camera and evidence checks, with direct access to your Oknef workspace.",
+    "Oknef workspace, live mini apps, encrypted Drive, asset maps and conversations.",
   permissions: ["activeTab"],
+  host_permissions: origin ? [`${origin}/*`] : [],
   action: {
     default_popup: "popup.html",
     default_title: "Oknef mini apps",
@@ -45,8 +52,7 @@ const manifest = {
     128: "icons/icon-128.png",
   },
   content_security_policy: {
-    extension_pages:
-      "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    extension_pages: `default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; connect-src ${origin ? `${origin} ${origin.replace(/^https:/, "wss:")}` : "'none'"}; frame-src https://player.vimeo.com; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
   },
 };
 await writeFile(

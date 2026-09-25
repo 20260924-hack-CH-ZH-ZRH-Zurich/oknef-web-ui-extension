@@ -29,6 +29,16 @@ export async function expandExtension(): Promise<void> {
     await api.tabs.create({ url: api.runtime.getURL("popup.html?app=qr") });
 }
 
+export async function openWorkspace(locale: string): Promise<void> {
+  const api = browserApi();
+  if (!api?.runtime || !api.tabs?.create)
+    throw new Error("workspace_unavailable");
+  const language = ["en", "es", "de", "fr"].includes(locale) ? locale : "en";
+  await api.tabs.create({
+    url: `${api.runtime.getURL("workspace.html")}#/${language}/workspace`,
+  });
+}
+
 export async function readActiveTabUrl(): Promise<string> {
   const tabs = await browserApi()?.tabs?.query({
     active: true,

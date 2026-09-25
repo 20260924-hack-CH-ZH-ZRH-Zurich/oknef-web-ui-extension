@@ -21,6 +21,8 @@ export type Copy = {
   preview: string;
   download: string;
   openApp: string;
+  openWorkspace: string;
+  workspaceError: string;
   appHint: string;
   clear: string;
   history: string;

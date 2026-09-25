@@ -1,6 +1,9 @@
 import type { Copy } from "../translations";
 
 export const de: Copy = {
+  openWorkspace: "Vollständigen Arbeitsbereich öffnen",
+  workspaceError:
+    "Der Arbeitsbereich konnte nicht geöffnet werden. Lade die Erweiterung neu und versuche es erneut.",
   language: "Sprache",
   eyebrow: "DEIN SICHERHEITSKIT FÜR DEN ALLTAG",
   title: "Innehalten. Prüfen. Entscheiden.",

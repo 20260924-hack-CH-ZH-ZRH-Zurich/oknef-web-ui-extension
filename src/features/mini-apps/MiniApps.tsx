@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { canReadActiveTab } from "@/lib/browser";
+import {
+  canExpandExtension,
+  canReadActiveTab,
+  openWorkspace,
+} from "@/lib/browser";
 import { config } from "@/lib/config";
 import { MAX_INPUT_LENGTH, MINI_APPS } from "@/lib/models/inspection";
 import {
@@ -213,6 +217,7 @@ export function MiniApps({
 }) {
   const [locale, setLocale] = useState<Locale>(initialLocale);
   const state = useInspection();
+  const [launchError, setLaunchError] = useState(false);
   const copy = translations[locale];
   useEffect(() => {
     document.documentElement.lang = locale;
@@ -224,6 +229,22 @@ export function MiniApps({
   return (
     <main className={styles.shell}>
       <Header locale={locale} setLocale={setLocale} />
+      {canExpandExtension() && (
+        <button
+          type="button"
+          className={styles.primary}
+          onClick={() => {
+            void openWorkspace(locale).catch(() => setLaunchError(true));
+          }}
+        >
+          {copy.openWorkspace} ↗
+        </button>
+      )}
+      {launchError && (
+        <p role="alert" className={styles.error}>
+          {copy.workspaceError}
+        </p>
+      )}
       <section className={styles.hero}>
         <p className={styles.eyebrow}>
           {preview ? copy.preview : copy.eyebrow}

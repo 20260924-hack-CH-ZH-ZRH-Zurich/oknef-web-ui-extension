@@ -1,6 +1,9 @@
 import type { Copy } from "../translations";
 
 export const fr: Copy = {
+  openWorkspace: "Ouvrir l’espace de travail complet",
+  workspaceError:
+    "Impossible d’ouvrir l’espace de travail. Rechargez l’extension et réessayez.",
   language: "Langue",
   eyebrow: "VOTRE KIT DE SÉCURITÉ AU QUOTIDIEN",
   title: "Pause. Vérifiez. Décidez.",
