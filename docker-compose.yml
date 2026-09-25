@@ -1,0 +1,32 @@
+name: oknef-web-ui-extension
+services:
+  preview:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_OKNEF_APP_ORIGIN: ${NEXT_PUBLIC_OKNEF_APP_ORIGIN:-}
+    image: oknef-web-ui-extension:${EXTENSION_IMAGE_TAG:-dev}
+    environment:
+      PORT: ${PORT:-3014}
+      HOSTNAME: ${HOSTNAME:-0.0.0.0}
+      HEALTHCHECK_URL: ${HEALTHCHECK_URL:-http://127.0.0.1:3014/health}
+    ports:
+      - "127.0.0.1:${EXTENSION_PREVIEW_PORT:-3014}:${PORT:-3014}"
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch(process.env.HEALTHCHECK_URL).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512M }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+  secret-scan:
+    image: zricethezav/gitleaks:v8.30.1
+    profiles: [verify]
+    command: ["dir", "/scan", "--redact", "--no-banner"]
+    volumes: [".:/scan:ro"]
