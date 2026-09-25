@@ -23,6 +23,9 @@ const context = await chromium.launchPersistentContext("", {
 const page = await context.newPage();
 page.setDefaultTimeout(25000);
 const report = {
+  startedAt: new Date().toISOString(),
+  evidenceScope:
+    "Installed extension with real HTTPS gateway; controlled demo account and QR fixture; no physical sensors",
   checks: [],
   pageErrors: [],
   apiFailures: [],
@@ -59,6 +62,15 @@ try {
   check(
     "Packaged extension signs in through exact-origin gateway with HttpOnly cookie and live WebSocket",
   );
+  const reconnects = Number(process.env.QA_RECONNECT_ATTEMPTS || "3");
+  assert(Number.isInteger(reconnects) && reconnects >= 1 && reconnects <= 20);
+  for (let attempt = 1; attempt <= reconnects; attempt++) {
+    await page.reload();
+    await expect(page.getByRole("banner")).toContainText("Connected", {
+      timeout: 25000,
+    });
+    check(`Authenticated websocket reconnect ${attempt}/${reconnects}`);
+  }
   for (const view of [
     "drive",
     "connections",
@@ -114,6 +126,7 @@ try {
   report.error = String(error);
   throw error;
 } finally {
+  report.finishedAt = new Date().toISOString();
   await writeFile(
     resolve(output, "extension-workspace.json"),
     JSON.stringify(report, null, 2),
