@@ -657,8 +657,12 @@
       "packaged_sha256": "93183314a31366ee5c044734487df5d525da9c2cdab2f6c20bc0bfe58161fa7e"
     },
     "src/features/workspace/useWorkspace.ts": {
-      "source_sha256": "f73b3e65396b9752da5b7ec2350e719eab8c3d8280485f03c27df60527958706",
-      "packaged_sha256": "1a74c7f12d102718e09d51f603821905e2db26d343a3d84f88d35b99f632698a"
+      "source_sha256": "955c851b7ac0ef6af494c795b4bcfd4f166974abf8adfb0d90f28a5b41986cca",
+      "packaged_sha256": "fef1f46ffcdffa52fd484f6d6c3374a26da6caa6e6d1285c6f3743d9c2489a85"
+    },
+    "src/features/workspace/workspaceSocket.ts": {
+      "source_sha256": "d7e6abe74c8ec7d0f6fb4688547ba074d9f6ffb15ea16c0b12c647ca4ed6a5a1",
+      "packaged_sha256": "d7e6abe74c8ec7d0f6fb4688547ba074d9f6ffb15ea16c0b12c647ca4ed6a5a1"
     },
     "src/features/auth/Auth.tsx": {
       "source_sha256": "fc2f590dfb2925c25a397c1ad0cd418d676b10a92c3167e2cc3c5f50d0d102f3",
